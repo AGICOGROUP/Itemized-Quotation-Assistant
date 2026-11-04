@@ -1,61 +1,78 @@
-# 分项报价助手 · 核心技能安装包
+# Installation and self-check
 
-版本：2026-11-04（契约绑定版）
+## 1. Place it in the skills directory
 
-## 包含内容
-
-```
-export-project-quotation/
-  SKILL.md                        流程与呈现契约（唯一形式）
-  contracts/form-presentation.md  机读契约：围栏、字数上限、槽位数、模板与形状哈希
-  templates/confirm-form.html     表单模板（唯一外观来源）
-  templates/confirm-form.sha256   模板指纹锁
-  templates/form-shape.sha256     形状指纹锁
-  scripts/                        渲染、校验、解码、核算、报表、Excel、测试
-  references/                     输入兼容与参数说明
-  MANIFEST.sha256                 全部文件校验值
-```
-
-## 安装
-
-1. 解压，把 `export-project-quotation/` 整个目录放到目标 Agent 的技能目录：
-   Windows `%USERPROFILE%\.accio\accounts\<account>\agents\<agent>\agent-core\skills\`
-   或 macOS/Linux `~/.accio/accounts/<account>/agents/<agent>/agent-core/skills/`
-2. 依赖：Python 3.9+（标准库即可）；`openpyxl`（导出 Excel）；`node`（表单语法自检，缺了只会降级为跳过 `node --check`，其余校验照做）。
-3. 安装后自检（在工作目录执行）：
+Copy this repository into the target agent's skills directory, keeping the folder name `export-project-quotation`:
 
 ```
+Windows      %USERPROFILE%\.accio\accounts\<account>\agents\<agent>\agent-core\skills\export-project-quotation\
+macOS/Linux  ~/.accio/accounts/<account>/agents/<agent>/agent-core/skills/export-project-quotation/
+```
+
+The final layout must be `export-project-quotation/SKILL.md`, plus `scripts/`, `templates/`, `contracts/` and `references/` beside it.
+
+## 2. Dependencies
+
+| Dependency | Purpose | If missing |
+|---|---|---|
+| Python 3.9+ | all scripts (standard library only) | nothing runs |
+| `openpyxl` | three-sheet Excel export | Excel step fails only; calculation and report still work |
+| `node` | JavaScript syntax self-check (`node --check`) | that check is skipped; the other gates still run |
+
+Install the Excel dependency with `pip install openpyxl`.
+
+## 3. Self-check (run this first)
+
+```bash
 cd export-project-quotation/scripts
 python check_contract.py
 python -m unittest test_grouped test_workflow test_submission
 ```
 
-第一条应输出 `CONTRACT OK`；第二条应输出 34 项测试全部 `OK`。
-任何一条不过，说明包里的模板与锁文件不匹配，不要使用，重新取包。
+- The first command must print `CONTRACT OK`. It verifies the fence identifier, size cap, slot count, template hash and shape hash in the contract against the template file, both lock files and a live sample render.
+- The second must end with `Ran 34 tests ... OK`.
 
-## 使用（固定六步）
+If either fails, the template and its locks disagree (incomplete or modified package). **Do not use it** — fetch a fresh copy.
 
-```
-python scripts/render_form.py --draft draft.json --output form.txt   # 生成表单，内部自检不过即不写文件
-python scripts/verify_form.py --form form.txt                        # 应输出 FORM OK
-python scripts/check_contract.py                                     # 应输出 CONTRACT OK
-# 把 form.txt 全文原样贴进对话，等用户回传 QP2 串
+## 4. Fixed workflow
+
+```bash
+# 1) render the parameter confirmation form (nothing is written if self-check fails)
+python scripts/render_form.py --draft draft.json --output form.txt
+python scripts/verify_form.py --form form.txt      # expect FORM OK
+python scripts/check_contract.py                   # expect CONTRACT OK
+# 2) paste form.txt verbatim into the chat; wait for the user to return the QP2 string
+# 3) decode the confirmation
 python scripts/parse_widget_submission.py --draft draft.json --message "@msg.txt" --output submission.json
-python scripts/prepare_input.py --draft draft.json --submission submission.json --user-message-reference "<QP2 串>" --output-dir .
-python scripts/quote.py --input input.json --confirmation confirmation.json --rate <汇率> ... --output result.json
-python scripts/report.py  → render_report.py / render_excel.py
+# 4) bind inputs (produces confirmation.json with a SHA256 of input.json)
+python scripts/prepare_input.py --draft draft.json --submission submission.json \
+       --user-message-reference "<QP2 string>" --output-dir .
+# 5) exchange rate: R = live (Bank of China USD spot buying rate), F = user-fixed rate
+python scripts/quote.py --input input.json --confirmation confirmation.json \
+       --rate 6.672 --rate-source "https://www.boc.cn/sourcedb/whpj/" \
+       --rate-type "USD spot buying rate" --rate-time "<quote time>" --rate-query-time "<fetch time>" --output result.json
+# 6) deliverables
+python scripts/render_report.py --result result.json --output report.md
+python scripts/render_excel.py  --result result.json --output quote.xlsx
 ```
 
-## 三条硬规则
+## 5. Three hard rules
 
-1. 表单只允许一种呈现：`quotation-confirm-form-v4` 的 widget 代码块，由 `render_form.py` 生成，整段复制，禁止手打改写。
-2. 禁止用 HTML 页面、图片、PDF、纯文本表格等第二种介质替代。
-3. 改模板或改形状必须 `--bless` 重签并跑全量测试；否则渲染会被锁拒绝，这是设计行为。
+1. Exactly one presentation: the `quotation-confirm-form-v4` widget block produced by `render_form.py`, copied verbatim. Hand-typing or rewriting it is forbidden.
+2. No second medium: no HTML page, image, PDF or plain-text table may replace the form.
+3. Any template or shape change requires an explicit `--bless` re-sign plus the full test run. Otherwise rendering is refused by the locks — that is intended behavior, not a fault.
 
-## 校验清单
+## 6. File integrity
 
-见同目录 `MANIFEST.sha256`，可在解压目录执行：
+`MANIFEST.sha256` records a checksum for every file. Verify from the repository root:
 
-```
-python -c "import hashlib,pathlib;[print(hashlib.sha256(p.read_bytes()).hexdigest(), p) for p in sorted(pathlib.Path('.').rglob('*')) if p.is_file()]"
+```bash
+python - <<'PY'
+import hashlib, pathlib
+for line in open('MANIFEST.sha256', encoding='utf-8'):
+    h, rel = line.strip().split('  ', 1)
+    p = pathlib.Path(rel)
+    ok = p.exists() and hashlib.sha256(p.read_bytes()).hexdigest() == h
+    print('OK ' if ok else 'BAD', rel)
+PY
 ```
