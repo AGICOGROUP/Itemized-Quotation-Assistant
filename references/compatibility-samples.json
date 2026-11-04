@@ -1,0 +1,341 @@
+{
+  "samples": [
+    {
+      "source": "codex-clipboard-f1a81ef0-aba9-4845-9326-22636493d79c.png",
+      "title": "1×200TPD石油焦燃料梁式石灰窑工程综合报价表",
+      "source_kind": "unconfirmed",
+      "unit": "万元",
+      "rows": [
+        {
+          "id": "s1.equipment",
+          "name": "配套设备及材料",
+          "amount": "1278.35",
+          "role": "detail"
+        },
+        {
+          "id": "s1.refractory",
+          "name": "耐材",
+          "amount": "137.52",
+          "role": "detail"
+        },
+        {
+          "id": "s1.instrument",
+          "name": "仪表",
+          "amount": "47.72",
+          "role": "detail"
+        },
+        {
+          "id": "s1.electric",
+          "name": "电气自动化",
+          "amount": "231.87",
+          "role": "detail"
+        },
+        {
+          "id": "s1.insulation",
+          "name": "保温材料",
+          "amount": "45.00",
+          "role": "detail",
+          "source_row": "序号留空的独立金额行"
+        },
+        {
+          "id": "s1.packing",
+          "name": "包装运输费",
+          "amount": "157.60",
+          "role": "detail"
+        },
+        {
+          "id": "s1.port_freight",
+          "name": "到港运费",
+          "amount": null,
+          "role": "detail",
+          "displayed_ratio": "0.0%"
+        },
+        {
+          "id": "s1.design",
+          "name": "设计费",
+          "amount": "76.00",
+          "role": "detail"
+        },
+        {
+          "id": "s1.guidance",
+          "name": "安装调试技术指导费",
+          "amount": "123.74",
+          "role": "detail"
+        },
+        {
+          "id": "s1.total",
+          "name": "合计",
+          "amount": "2097.79",
+          "role": "total"
+        }
+      ]
+    },
+    {
+      "source": "codex-clipboard-a6465e10-72a8-43a4-aa48-2725fac4e780.png",
+      "title": "报价汇总表",
+      "source_kind": "unconfirmed",
+      "unit": "万元",
+      "rows": [
+        {
+          "id": "s2.engineering",
+          "name": "工程费用",
+          "role": "header",
+          "amount": null
+        },
+        {
+          "id": "s2.process",
+          "parent_id": "s2.engineering",
+          "name": "工艺设备",
+          "role": "header",
+          "amount": null
+        },
+        {
+          "id": "s2.air",
+          "parent_id": "s2.process",
+          "name": "空气净化",
+          "amount": "40.0",
+          "role": "detail"
+        },
+        {
+          "id": "s2.slaking",
+          "parent_id": "s2.process",
+          "name": "消化工序",
+          "amount": "208.1",
+          "role": "detail"
+        },
+        {
+          "id": "s2.carbon",
+          "parent_id": "s2.process",
+          "name": "调浆碳化活化工序",
+          "amount": "380.3",
+          "role": "detail"
+        },
+        {
+          "id": "s2.drying",
+          "parent_id": "s2.process",
+          "name": "脱水干燥包装",
+          "amount": "389.7",
+          "role": "detail"
+        },
+        {
+          "id": "s2.utility",
+          "parent_id": "s2.engineering",
+          "name": "公用工程",
+          "amount": "140.5",
+          "role": "detail"
+        },
+        {
+          "id": "s2.pump",
+          "parent_id": "s2.engineering",
+          "name": "泵、管道、钢平台",
+          "amount": "200.0",
+          "role": "detail"
+        },
+        {
+          "id": "s2.valve",
+          "parent_id": "s2.engineering",
+          "name": "阀门仪表等",
+          "amount": "80.0",
+          "role": "detail"
+        },
+        {
+          "id": "s2.insulation",
+          "parent_id": "s2.engineering",
+          "name": "保温",
+          "amount": "20.0",
+          "role": "detail"
+        },
+        {
+          "id": "s2.power",
+          "parent_id": "s2.engineering",
+          "name": "供配电",
+          "amount": "350.0",
+          "role": "detail"
+        },
+        {
+          "id": "s2.engineering_subtotal",
+          "name": "工程费小计",
+          "role": "subtotal",
+          "amount": "1808.6",
+          "scope_parent_id": "s2.engineering"
+        },
+        {
+          "id": "s2.other",
+          "name": "其他费用",
+          "role": "header",
+          "amount": null
+        },
+        {
+          "id": "s2.design",
+          "parent_id": "s2.other",
+          "name": "设计费",
+          "role": "detail",
+          "amount": "150.0"
+        },
+        {
+          "id": "s2.total",
+          "name": "报价合计",
+          "role": "total",
+          "amount": "1958.6"
+        }
+      ]
+    },
+    {
+      "source": "codex-clipboard-4603e129-9729-4362-b031-77883f897b93.png",
+      "title": "主机设备商务报价表",
+      "source_kind": "unconfirmed",
+      "unit": "万元",
+      "rows": [
+        {
+          "id": "s3.parts",
+          "name": "A1 配套设备",
+          "role": "header",
+          "amount": null
+        },
+        {
+          "id": "s3.body",
+          "parent_id": "s3.parts",
+          "name": "磨机本体",
+          "role": "detail",
+          "amount": "118.5",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "118.5",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.motor",
+          "parent_id": "s3.parts",
+          "name": "主电机",
+          "role": "detail",
+          "amount": "25.8",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "25.8",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.reducer",
+          "parent_id": "s3.parts",
+          "name": "主减速机",
+          "role": "detail",
+          "amount": "19",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "19",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.auxmotor",
+          "parent_id": "s3.parts",
+          "name": "辅助电机",
+          "role": "detail",
+          "amount": "0.3",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "0.3",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.auxreducer",
+          "parent_id": "s3.parts",
+          "name": "辅助减速机",
+          "role": "detail",
+          "amount": "1.2",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "1.2",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.lubrication",
+          "parent_id": "s3.parts",
+          "name": "润滑系统",
+          "role": "detail",
+          "amount": "9",
+          "quantity": "2",
+          "quantity_unit": "台",
+          "unit_price": "4.5",
+          "unit_price_unit": "万元"
+        },
+        {
+          "id": "s3.tools",
+          "parent_id": "s3.parts",
+          "name": "安装工具",
+          "role": "detail",
+          "amount": null,
+          "metadata": {
+            "model": "无",
+            "quantity": null
+          }
+        },
+        {
+          "id": "s3.packing",
+          "name": "包装",
+          "role": "detail",
+          "amount": "10",
+          "metadata": {
+            "model": "无",
+            "quantity": null
+          }
+        },
+        {
+          "id": "s3.blank9",
+          "name": "空白第9行",
+          "role": "spacer",
+          "amount": null
+        },
+        {
+          "id": "s3.main",
+          "name": "高细磨机整机价格",
+          "role": "reference",
+          "amount": "178",
+          "quantity": "1",
+          "quantity_unit": "台",
+          "unit_price": "178",
+          "unit_price_unit": "万元",
+          "scope_parent_id": "s3.parts",
+          "metadata": {
+            "model": "Ø2.6×13m",
+            "single_weight_t": "137",
+            "total_weight_t": "151"
+          }
+        },
+        {
+          "id": "s3.total",
+          "name": "设备总价",
+          "role": "total",
+          "amount": "183.8"
+        }
+      ],
+      "written_totals": [
+        {
+          "text": "壹佰捌拾叁万捌仟圆整",
+          "against_row_id": "s3.total"
+        }
+      ],
+      "terms": [
+        {
+          "text": "交货期：合同生效后4个半月",
+          "cost_scope": "not_cost"
+        },
+        {
+          "text": "交货地点：汽运到需方施工现场或仓库",
+          "cost_scope": "unknown"
+        },
+        {
+          "text": "大件运输方案：采用平板车托运",
+          "cost_scope": "not_cost"
+        },
+        {
+          "text": "交货条件：不含卸车费",
+          "cost_scope": "excluded"
+        },
+        {
+          "text": "运输方式：公路或铁路运输",
+          "cost_scope": "not_cost"
+        }
+      ]
+    }
+  ]
+}

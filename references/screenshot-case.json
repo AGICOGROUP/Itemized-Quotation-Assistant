@@ -1,0 +1,14 @@
+{
+  "margin": "0.25",
+  "commission": "0.075",
+  "expected_cost": "26890000",
+  "items": [
+    {"name":"原料成品系统","cost":"2040000","vat":"0.13","refund":"0.13","mode":"proportional"},
+    {"name":"窑本体系统","cost":"11250000","vat":"0.13","refund":"0.13","mode":"proportional"},
+    {"name":"非标钢结构","cost":"3840000","vat":"0.13","refund":"0.13","mode":"markup","markup":"0.15"},
+    {"name":"三电系统","cost":"5570000","vat":"0.13","refund":"0.13","mode":"proportional"},
+    {"name":"耐火材料","cost":"2890000","vat":"0.13","refund":"0","mode":"markup","markup":"0.15"},
+    {"name":"设计费","cost":"800000","vat":"0","refund":"0","mode":"original"},
+    {"name":"编程费","cost":"500000","vat":"0","refund":"0","mode":"original"}
+  ]
+}

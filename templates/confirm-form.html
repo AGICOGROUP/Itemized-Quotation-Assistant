@@ -1,0 +1,163 @@
+<style>
+#qf{font-size:13px;color:var(--color-text-primary,#1f2328);font-family:inherit}
+#qf .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+#qf .row2{display:grid;grid-template-columns:132px 1fr;gap:0 14px;align-items:start}
+@media(max-width:520px){#qf .grid,#qf .row2{grid-template-columns:1fr}}
+#qf label.f{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;font-size:12px;color:var(--color-text-secondary,#4b5563)}
+#qf input.i,#qf select.i{width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border:1px solid var(--color-border-secondary,#d0d7de);border-radius:6px;background:var(--color-background-primary,#fff);color:var(--color-text-primary,#1f2328)}
+#qf input.i[readonly],#qf input.i:disabled{background:var(--color-background-secondary,#f6f8fa);color:var(--color-text-secondary,#4b5563)}
+#qf h3{font-size:14px;font-weight:500;margin:16px 0 8px;color:var(--color-text-primary,#1f2328)}
+#qf hr{border:none;border-top:1px solid var(--color-border-tertiary,#e5e7eb);margin:14px 0}
+#qf .c{display:inline-flex;align-items:center;gap:5px;font-size:12px;margin:2px 10px 2px 0;color:var(--color-text-secondary,#4b5563)}
+#qf summary{cursor:pointer;font-size:12px;color:var(--color-action-primary,#1f6feb);margin-bottom:4px}
+#qf .list{display:flex;flex-wrap:wrap;padding:8px;border:1px solid var(--color-border-tertiary,#e5e7eb);border-radius:6px}
+#qf .note{font-size:12px;color:var(--color-text-tertiary,#6b7280);margin:6px 0 0;line-height:1.6}
+#qf button{margin-top:12px;padding:6px 14px;font-size:13px;border-radius:6px;border:1px solid var(--color-action-primary,#1f6feb);background:var(--color-action-primary,#1f6feb);color:var(--color-action-primary-foreground,#fff);cursor:pointer}
+#qf .err,#qf .ok{font-size:12px;margin:8px 0 0}
+#qf .err{color:var(--color-status-error-text,#b42318)}
+#qf .ok{color:var(--color-text-secondary,#4b5563)}
+#qf code[hidden]{display:none!important}
+#qf code:not([hidden]){display:block;word-break:break-all;font-size:11px;padding:6px;border-radius:4px;background:var(--color-code-background,#f6f8fa);color:var(--color-code-text,#1f2328);margin-top:4px}
+#qf section.off{opacity:.45}
+#qf section.off summary{cursor:not-allowed;color:var(--color-text-tertiary,#9aa4b2)}
+</style>
+<div id="qf">
+  <div class="grid">
+    <label class="f">成本合计（元，共__COUNT__项明细之和）<input class="i" id="f_cost_total" type="number" value="__COST_TOTAL__" readonly></label>
+    <label class="f">成本口径<input class="i" id="f_cost_basis" type="text" value="人民币；可退税项含税" readonly></label>
+    <label class="f">进项税率（%，货物类）<input class="i" id="f_vat" type="number" min="0" step="any" value="13"></label>
+    <label class="f">假定退税率（%，按未税成本）<input class="i" id="f_refund" type="number" min="0" step="any" value="13"></label>
+  </div>
+  <h3>整体目标利润率</h3>
+  <div class="grid">
+    <label class="f">目标利润率（%，占最终销售额）<input class="i" id="f_margin" type="number" min="0" step="any" value="25"></label>
+    <label class="f">佣金率（%，占销售额）<input class="i" id="f_commission" type="number" min="0" step="any" value="7.5"></label>
+  </div>
+  <h3>不可退税项目（点击选择，可多选）</h3>
+  <div class="list" id="nfList"></div>
+  <label class="f" style="margin-top:8px">不可退税金额（元，自动合计）<input class="i" id="f_nfTotal" type="number" readonly value="0"></label>
+  <p class="note">__NOTE__</p>
+  <hr>
+  <div id="rules"></div>
+  <div class="grid">
+    <label class="f">额外费用（元，运费、到港费等）<input class="i" id="f_extra_cost" type="number" min="0" step="any" value="0"></label>
+    <label class="f">剩余报价分摊规则<input class="i" id="f_allocation" type="text" value="按厂家原成本比例分摊" readonly></label>
+    <label class="f">报价币种<input class="i" id="f_currencies" type="text" value="人民币、美元" readonly></label>
+    <label class="f">汇率方式<select class="i" id="fxMode"><option value="realtime">实时：中行美元现汇买入价</option><option value="fixed">手动固定汇率（不联网）</option></select></label>
+    <label class="f">固定汇率（CNY per USD，选手动时填写）<input class="i" id="fxRate" type="number" min="0" step="any" value="" disabled></label>
+    <label class="f">价格口径（supplier_cost=厂家采购成本）<input class="i" id="f_source_kind" type="text" value="supplier_cost"></label>
+    <label class="f">补充说明（选填）<input class="i" id="f_summary" type="text" value=""></label>
+  </div>
+  <p class="err" id="err"></p>
+  <button type="button" id="go">确认参数并计算</button>
+  <p class="ok" id="status"></p>
+  <code id="dumpCode" hidden></code>
+</div>
+<script>
+(function(){
+const D=/*QUOTATION_PAYLOAD*/ {};
+const MAXLEN=500;
+const byId={};D.items.forEach(function(i){byId[i.id]=i;});
+const val=function(k){return document.getElementById('f_'+k).value;};
+const b64url=function(bytes){let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
+const bitmap=function(ids){const buf=new Uint8Array(Math.ceil(D.items.length/8));D.items.forEach(function(it,i){if(ids.has(it.id))buf[i>>3]|=1<<(i&7);});return b64url(buf);};
+const text64=function(t){return b64url(new TextEncoder().encode(t||''));};
+const nfList=document.getElementById('nfList'),nfTotal=document.getElementById('f_nfTotal'),nfChecks=new Map();
+function taxTotal(){let s=0;nfChecks.forEach(function(c,id){if(c.checked)s+=Number(byId[id].cost);});nfTotal.value=String(s);}
+D.items.forEach(function(it){
+const lb=document.createElement('label');lb.className='c';
+const cb=document.createElement('input');cb.type='checkbox';
+const sp=document.createElement('span');sp.textContent=it.name;
+lb.append(cb,sp);nfList.append(lb);nfChecks.set(it.id,cb);cb.onchange=taxTotal;if((D.nf||[]).indexOf(it.id)>=0)cb.checked=true;
+});
+taxTotal();
+const fxMode=document.getElementById('fxMode'),fxRate=document.getElementById('fxRate');
+function fxSync(){const fixed=fxMode.value==='fixed';fxRate.disabled=!fixed;if(!fixed)fxRate.value='';}
+fxMode.onchange=fxSync;fxSync();
+const rows=[];
+function addRule(){
+const n=rows.length+1,sec=document.createElement('section');
+const h=document.createElement('h3');h.textContent='特殊加价率 '+n;sec.appendChild(h);
+const wrap=document.createElement('div');wrap.className='row2';
+const rl=document.createElement('label');rl.className='f';rl.textContent='成本加价率（%，0=原价）';
+const ri=document.createElement('input');ri.className='i';ri.type='number';ri.min='0';ri.step='any';rl.appendChild(ri);wrap.appendChild(rl);
+const pl=document.createElement('div');pl.className='f';pl.textContent='适用项目（可多选，未选项目走通用分摊）';
+const det=document.createElement('details'),sm=document.createElement('summary');sm.textContent='点击选择项目';
+const list=document.createElement('div');list.className='list';det.append(sm,list);pl.appendChild(det);wrap.appendChild(pl);
+const row={input:ri,ids:new Set(),checks:new Map(),summary:sm,sec:sec,off:false};
+D.items.forEach(function(it){
+const lb=document.createElement('label');lb.className='c';
+const cb=document.createElement('input');cb.type='checkbox';
+const sp=document.createElement('span');sp.textContent=it.name;
+lb.append(cb,sp);list.appendChild(lb);row.checks.set(it.id,cb);
+cb.onchange=function(){
+if(cb.checked){rows.forEach(function(o){if(o!==row){o.ids.delete(it.id);o.checks.get(it.id).checked=false;}});row.ids.add(it.id);}
+else row.ids.delete(it.id);
+refresh();
+};
+});
+sec.appendChild(wrap);document.getElementById('rules').appendChild(sec);rows.push(row);
+return row;
+}
+function refresh(){
+rows.forEach(function(o){
+if(o.off){o.summary.textContent='填写上一条加价率后启用';return;}
+o.summary.textContent=o.ids.size?('已选 '+o.ids.size+' 项：'+D.items.filter(function(x){return o.ids.has(x.id);}).slice(0,2).map(function(x){return x.name;}).join('、')+(o.ids.size>2?'…':'')):'点击选择项目';
+});
+}
+function lock(){
+rows.forEach(function(o,i){
+if(i<3)o.off=false;
+else o.off=!String(rows[i-1].input.value).trim()&&!String(o.input.value).trim()&&!o.ids.size;
+o.sec.classList.toggle('off',o.off);
+o.input.disabled=o.off;
+o.checks.forEach(function(c){c.disabled=o.off;});
+});
+refresh();
+}
+const presetCount=(D.presets||[]).length;
+for(let k=0;k<Math.max(6,presetCount);k++)addRule();
+(D.presets||[]).forEach(function(p,i){
+const r=rows[i];if(!r)return;
+r.input.value=String(p.rate);
+(p.ids||[]).forEach(function(id){if(r.checks.has(id)){r.ids.add(id);r.checks.get(id).checked=true;}});
+});
+rows.forEach(function(r){r.input.oninput=lock;});
+lock();
+function fxValue(){
+if(fxMode.value!=='fixed')return '实时：中行美元现汇买入价';
+return '固定汇率 1 USD = '+fxRate.value+' CNY（用户指定，未联网查询）';
+}
+function encode(){
+const groups=[];
+rows.forEach(function(r){
+if(!r.ids.size)return;
+const v=r.input.value;
+if(v===''||!isFinite(Number(v))||Number(v)<0)throw new Error('请填写特殊加价率的百分比，或取消该栏的项目选择');
+groups.push(Number(v)+':'+bitmap(r.ids));
+});
+const nf=new Set(Array.from(nfChecks.keys()).filter(function(k){return nfChecks.get(k).checked;}));
+const p={cost_total:val('cost_total'),cost_basis:val('cost_basis'),margin:val('margin'),commission:val('commission'),vat:val('vat'),refund:val('refund'),allocation:val('allocation'),currencies:val('currencies'),fx_rule:fxValue(),extra_cost:val('extra_cost'),source_kind:val('source_kind'),summary:val('summary')};
+const mode=fxMode.value==='fixed'?'F':'R';
+if(mode==='F'){const v=fxRate.value;if(v===''||!isFinite(Number(v))||Number(v)<=0)throw new Error('手动固定汇率需填写大于 0 的 CNY/USD 数值');}
+const msg=['QP2',D.case_id,p.margin,p.commission,p.vat,p.refund,p.extra_cost,p.source_kind,text64(p.summary),groups.join(';'),bitmap(nf),mode,mode==='F'?fxRate.value:''].join('|');
+return {msg:msg,p:p};
+}
+document.getElementById('go').onclick=function(){
+const err=document.getElementById('err'),st=document.getElementById('status'),code=document.getElementById('dumpCode');
+err.textContent='';st.textContent='';code.textContent='';code.hidden=true;
+let built;
+try{
+if(Number(val('margin'))+Number(val('commission'))>=100)throw new Error('利润率与佣金率之和必须小于 100%');
+if(Number(val('refund'))>Number(val('vat')))throw new Error('假定退税率不得高于进项税率');
+if(val('source_kind').trim()!=='supplier_cost')throw new Error('本表若不是厂家采购成本，请先说明口径，不要在此叠加利润');
+built=encode();
+if(built.msg.length>MAXLEN)throw new Error('提交串 '+built.msg.length+' 字符，超过宿主上限 '+MAXLEN+'，请精简补充说明');
+if(typeof window.__widgetSendMessage!=='function')throw new Error('当前宿主不支持表单提交，尚未确认也未计算');
+}catch(e){err.textContent=e.message;if(built){code.textContent=built.msg;code.hidden=false;}return;}
+window.__widgetSendMessage(built.msg);
+st.textContent='已提交（'+built.msg.length+' 字符，汇率'+(fxMode.value==='fixed'?'手动固定 '+fxRate.value:'实时查询')+'），等待核算。若未自动开始，请把下方提交串发给助手。';
+code.textContent=built.msg;code.hidden=false;
+};
+})();
+</script>
