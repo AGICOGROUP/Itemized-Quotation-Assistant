@@ -3,6 +3,17 @@ name: "[Harvest] 出口项目分项报价与Excel导出"
 description: 根据厂家成本表制作出口项目分项报价；通过对话内Widget表单确认参数（含可选汇率模式），计算并展示原价、加价规则及最终报价，最后生成包含分项明细、参数设置及计算过程的Excel汇总表供用户下载。严格绑定单一表单呈现方式，禁止使用HTML或其他替代格式。
 created_by: main_agent
 ---
+## 0. 环境自检（每次开工先跑，不过不许开工）
+
+```bash
+python scripts/preflight.py
+```
+
+- 必须看到 `PREFLIGHT OK` 才继续。看到 `PREFLIGHT BLOCKED` 就停：把缺项原样告诉用户，不许"先跑再说"，也不许用别的方式绕。
+- 它逐项检查：Python ≥3.9、技能文件是否齐全、模板与契约是否一致（模板指纹 + 形状指纹）、技能目录是否可写、`openpyxl`（缺了自动 `pip install`）、`node`（缺了降级为跳过 JS 语法自检）。
+- `--no-fix` 只检查不安装。自动安装只放开 `openpyxl` 一项，其余缺项必须人工处理。
+- 客户端版本只打印不判定：**渲染能力命令行测不出来**，只能靠表单发出后的 `verify_sent.py` 判定（见 Workflow 步骤 2）。
+
 ## Workflow
 1. **读取与标准化**：读取{cost_file}或{screenshot}，按 [references/input-compatibility.md](references/input-compatibility.md) 转录。逐项求和必须与表内小计/合计对上；对不上先说明差额，不得自行抹平。产出 `work/{case_id}/draft.json`，其中 `fields`、`items`、`categories`、`item_settings` 四部分齐全。
 2. **生成确认表单**：执行 `python scripts/render_form.py --draft draft.json --output form.txt`。渲染器在写文件前自动运行内部校验（围栏、长度、占位符、括号配平、`node --check`），任何一项不过就报错且**不产出文件**。脚本输出**完整的 widget 代码块**（首行 ```widget quotation-confirm-form-v4，末行 ```）。将 `form.txt` 全文原样贴入回复：用工具读文件后整段复制，**禁止在回复里重新手打或改写任何字符**。发前可再跑 `python scripts/verify_form.py --form form.txt` 复核，看到 `FORM OK`。
