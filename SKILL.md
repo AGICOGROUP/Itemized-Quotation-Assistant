@@ -11,6 +11,9 @@ created_by: main_agent
    - 表单外观由 `templates/confirm-form.html` 唯一决定，不随项目变化；变化的只有项目明细、成本合计、预置加价组和税额提示。
    - 生成后跑 `python scripts/check_contract.py`，必须看到 `CONTRACT OK`：它核对 [contracts/form-presentation.md](contracts/form-presentation.md) 里的围栏、上限、槽位数与两个哈希是否与模板、锁文件、样例渲染一致。
    - 脚本对整块长度做硬校验（上限 12,000 字符），超限直接报错并且不产出文件。此时**不要**硬发，按脚本提示减少行数或改用汇总口径。
+   - **发送后必须回读校验**：贴出表单后立刻跑 `python scripts/verify_sent.py`。它读宿主持久化的会话记录（`~/.accio/accounts/*/conversations/dm/*.jsonl`），核对**实际发出的那条消息**，而不是 `form.txt`。必须看到 `SENT OK`。
+     - 输出 `SENT BROKEN` 时，看 `fence line` 一行：它打印真实首行。据此改正后重发一次（最多两次）；重发后仍不支持，按 Pitfalls 处理。
+     - 这一步是唯一能发现"文件对、消息错"的手段：围栏被合并进上一句、被列表或引用包裹、被缩进、首行混入全角空格或不可见字符、丢失闭合围栏，在 `form.txt` 里全都看不出来。
 3. **接收确认**：等用户点"确认参数并计算"并回传 QP2 串。用 `scripts/parse_widget_submission.py --draft draft.json --message "@msg.txt" --output submission.json` 解码。不得从自然语言里"猜"参数。
 4. **绑定输入**：`scripts/prepare_input.py --draft draft.json --submission submission.json --user-message-reference "<原始QP2串>" --output-dir .`，产出 `input.json` 与带 SHA256 的 `confirmation.json`。两者不一致时 `quote.py` 会拒绝计算，这是设计行为，不要去改记录。
 5. **汇率**：QP2 末尾 `R` = 实时，取中国银行美元现汇买入价（[牌价页](https://www.boc.cn/sourcedb/whpj/)，记录牌价发布时间与查询时间）；`F` = 用户填的固定汇率，直接采用，不联网。未取到汇率就停，不要用估值。
@@ -69,6 +72,19 @@ created_by: main_agent
 
 改模板/改形状必须显式重签：`python scripts/render_form.py --bless --draft draft.json --output form.txt`（`--bless` 会同步重签契约哈希），随后跑全量测试 `python -m unittest test_grouped test_workflow test_submission`（34 项）。
 
+## 宿主解析事实（从客户端安装包 `app.asar` 中取得的实际实现）
+
+| 事实 | 内容 |
+|---|---|
+| 解析语法 | `(?<=^|\n)` + ` ```widget ` + `[ \t]+` + `[A-Za-z0-9_-]+` + `[^\n]*\n` + 正文 + `(?:\n```[^\S\n]*(?=\n|$)\|$)` |
+| 标识符 | 允许字母、数字、下划线、连字符（`quotation-confirm-form-v4` 合规）；`title="..."` 是旧语法 |
+| 位置 | 围栏必须位于消息开头或换行之后（前面不能紧跟文字） |
+| 分隔符 | `widget` 与 id 之间只能是 ASCII 空格或制表符（全角空格、不换行空格会失败） |
+| 闭合 | 必须是独立一行、只含 ``` ，其后只允许空格/制表符 |
+| 降级 | `unknownProtocol` / `malformedPayload` / `rendererError` → **raw-text（显示源码）**；`streaming` → `render-partial` |
+
+由此可判：**显示源码** ≠ 文件有问题，也 ≠ 超长（超长是整块不显示）。它意味着块已被切出但渲染这一步降级，或整条消息没被当作 widget 解析（围栏行不符合上表）。
+
 ## 计算口径
 
 - 可退税成本 = 合计 − 不可退税；假定退税 = Σ 成本 ÷ (1+进项税率) × 退税率；退税后成本 = 合计 − 退税 + 额外费用。
@@ -78,10 +94,10 @@ created_by: main_agent
 
 ## Pitfalls
 
-- 步骤2 排障先分症状，两种症状原因不同：
-  - **显示成源码**（用户看到 `<style>`、`#qf{...}`）：围栏被改写／缩进／列表或引用包裹／二次包裹，或该客户端不认 `widget` 围栏。取证方式：让用户把那条回复原文复制存成 `msg.txt`，跑 `python scripts/verify_form.py --form msg.txt`——`FORM NOT SENDABLE` 会打印首行实际内容（`got '...'`），`FORM OK` 而症状依旧则是客户端能力问题，**不要改包、不要换介质**。
+- 步骤2 排障先分症状：
+  - **显示成源码**（用户看到 `<style>`、`#qf{...}`）：`python scripts/verify_sent.py` 直接给出实际发出的首行与判定，**不要向用户索取截图或让他手工取证**。`SENT BROKEN` ⇒ 按打印的 `fence line` 改正后重发；`SENT OK` 却仍显示源码 ⇒ 属于宿主渲染降级（见上表），如实说明并让用户升级客户端或在同一客户端的另一个会话重试，**不要改包、不要换介质**。
   - **整块消失**：总字符数超 12,000，宿主直接丢弃。
-  - 用户报"没渲染"但拿不到原文时，先让他做 30 秒最小控件测试：让助手用 widget 围栏输出一个 40×40 的红色圆点块。也显示源码 ⇒ 客户端不支持 widget 渲染，与技能包无关。
+- 报告或排障说明中，**必须**给出两行原始事实：`verify_form` 的 `FORM OK/NOT SENDABLE`、`verify_sent` 的 `SENT OK/SENT BROKEN` 与其打印的 `fence line`。缺这两行就只是描述现象，不能作为结论。
 - 步骤2：不要把 `<style>`／`<script>` 拆出围栏，也不要在代码块内嵌套第二个围栏，渲染会失败。
 - 呈现：任何"另做一份 HTML 给对方"的提议都违反契约。对方看不到表单时，按上文跨客户端说明处理，不换介质。
 - 分摊：槽位把多数项目钉在低加价时，通用分摊系数会被推到极端值（曾出现 6.03）。总价对但分项不可解释，须在回复中明确指出并请用户复核分配。
