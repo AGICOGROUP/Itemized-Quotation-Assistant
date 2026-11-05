@@ -42,6 +42,43 @@ except Exception:  # noqa: BLE001 - keep the tool usable in a broken install
 FENCE = '```'
 
 
+def client_version():
+    """Best-effort client build, so a report can distinguish build from content."""
+    import re
+    home = os.path.expanduser('~')
+    pattern = re.compile(r'appVersion\D{0,6}(\d+\.\d+\.\d+)')
+    log_dir = os.path.join(home, '.accio', 'logs')
+    files = []
+    if os.path.isdir(log_dir):
+        for name in os.listdir(log_dir):
+            path = os.path.join(log_dir, name)
+            if os.path.isfile(path):
+                files.append(path)
+    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    for path in files[:6]:
+        try:
+            with open(path, 'rb') as handle:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                handle.seek(max(0, size - 400_000))
+                blob = handle.read().decode('utf-8', 'replace')
+        except Exception:  # noqa: BLE001
+            continue
+        hits = pattern.findall(blob)
+        if hits:
+            return hits[-1]
+    install = os.path.join(home, '.accio', 'appInstall.jsonl')
+    if os.path.exists(install):
+        try:
+            blob = open(install, encoding='utf-8', errors='replace').read()
+            hits = re.findall(r'"version"\s*:\s*"(\d+\.\d+\.\d+)"', blob)
+            if hits:
+                return hits[-1]
+        except Exception:  # noqa: BLE001
+            pass
+    return 'unknown'
+
+
 def _iter_messages(path):
     """Yield dict records from a conversation jsonl file."""
     with open(path, encoding='utf-8', errors='replace') as handle:
@@ -144,6 +181,7 @@ def main():
     if args.json:
         print(json.dumps(results, ensure_ascii=False, indent=2))
     else:
+        print('client ver  :', client_version(), '| python', sys.version.split()[0])
         for item in results:
             print('-' * 68)
             print('file        :', os.path.basename(item['file']))
