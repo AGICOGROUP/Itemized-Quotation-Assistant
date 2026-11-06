@@ -1,201 +1,94 @@
-"""Check the form block that was actually sent, not the file that was generated.
-
-A generated form.txt can be perfect while the message that reaches the chat is
-broken: the fence line gets merged into the previous sentence, the block gets
-nested in a list, or the closing fence is dropped. Every one of those turns the
-widget into a plain code block, and none of them is visible in form.txt.
-
-The host persists every assistant message under
-``~/.accio/accounts/*/conversations/dm/*.jsonl``, so the sent text can be read
-back and verified. Run this immediately after pasting the form.
-
-    python scripts/verify_sent.py              # newest form message, any account
-    python scripts/verify_sent.py --last 3     # inspect the last three
-    python scripts/verify_sent.py --json       # machine-readable
-
-Exit code 0 only when the newest form message is sendable as-is.
-"""
+"""Compare the actual Accio reply for this case with the generated form."""
 import argparse
-import glob
 import json
-import os
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-try:
-    from verify_form import FENCE_ID, check_block
-except Exception:  # noqa: BLE001 - keep the tool usable in a broken install
-    FENCE_ID = 'quotation-confirm-form-v4'
-
-    def check_block(text, syntax_check=True):
-        problems = []
-        if not text.split('\n', 1)[0].startswith('```widget ' + FENCE_ID):
-            problems.append('first line is not the required fence')
-        if not text.rstrip().endswith('```'):
-            problems.append('block does not end with a closing fence')
-        if text.count('```') != 2:
-            problems.append('expected exactly two fences, found %d' % text.count('```'))
-        return problems, {}
+from verify_form import PAYLOAD_RE, check_block
 
 
-FENCE = '```'
+def conversations():
+    accounts = Path.home() / '.accio/accounts'
+    paths = accounts.glob('*/conversations/*/*.jsonl')
+    return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)[:40]
 
 
-def client_version():
-    """Best-effort client build, so a report can distinguish build from content."""
-    import re
-    home = os.path.expanduser('~')
-    pattern = re.compile(r'appVersion\D{0,6}(\d+\.\d+\.\d+)')
-    log_dir = os.path.join(home, '.accio', 'logs')
-    files = []
-    if os.path.isdir(log_dir):
-        for name in os.listdir(log_dir):
-            path = os.path.join(log_dir, name)
-            if os.path.isfile(path):
-                files.append(path)
-    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-    for path in files[:6]:
+def find_reply(paths, case_marker):
+    for path in paths:
+        latest = None
         try:
-            with open(path, 'rb') as handle:
-                handle.seek(0, os.SEEK_END)
-                size = handle.tell()
-                handle.seek(max(0, size - 400_000))
-                blob = handle.read().decode('utf-8', 'replace')
-        except Exception:  # noqa: BLE001
+            with path.open(encoding='utf-8', errors='replace') as handle:
+                for line in handle:
+                    if 'widget' not in line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except ValueError:
+                        continue
+                    if record.get('role') not in ('assistant', 'res'):
+                        continue
+                    if (record.get('name') or '').lower() in ('bash', 'tool', 'explore', 'browser', 'general'):
+                        continue
+                    content = record.get('content')
+                    if isinstance(content, str) and case_marker in content:
+                        latest = content
+        except OSError:
             continue
-        hits = pattern.findall(blob)
-        if hits:
-            return hits[-1]
-    install = os.path.join(home, '.accio', 'appInstall.jsonl')
-    if os.path.exists(install):
-        try:
-            blob = open(install, encoding='utf-8', errors='replace').read()
-            hits = re.findall(r'"version"\s*:\s*"(\d+\.\d+\.\d+)"', blob)
-            if hits:
-                return hits[-1]
-        except Exception:  # noqa: BLE001
-            pass
-    return 'unknown'
+        if latest is not None:
+            return latest
+    return None
 
 
-def _iter_messages(path):
-    """Yield dict records from a conversation jsonl file."""
-    with open(path, encoding='utf-8', errors='replace') as handle:
-        for line in handle:
-            line = line.strip()
-            if not line or '```widget' not in line:
-                continue
-            try:
-                yield json.loads(line)
-            except Exception:  # noqa: BLE001
-                continue
-
-
-def _block_of(text):
-    """Return the substring from the first widget fence to its closing fence."""
-    start = text.find('```widget')
-    if start < 0:
-        return None
-    close = text.find(FENCE, start + 3)
-    if close < 0:
-        return text[start:]
-    return text[start:close + 3]
-
-
-def _is_form_message(record, fence_id):
-    """True only for a real assistant reply carrying the form, not tool output."""
-    if record.get('role') not in ('res', 'assistant'):
-        return False
-    name = (record.get('name') or '').lower()
-    if name in ('bash', 'tool', 'explore', 'browser', 'general'):
-        return False
-    text = record.get('content')
-    if not isinstance(text, str):
-        return False
-    if ('```widget ' + fence_id) not in text and '```widget' not in text:
-        return False
-    if '<style>' not in text or '</script>' not in text:
-        return False
-    return True
-
-
-def find_messages(limit, fence_id):
-    """Return the most recent assistant messages holding a form block, newest first."""
-    home = os.path.expanduser('~')
-    pattern = os.path.join(home, '.accio', 'accounts', '*', 'conversations', 'dm', '*.jsonl')
-    files = glob.glob(pattern)
-    if not files:
-        pattern = os.path.join(home, '.accio', 'accounts', '*', 'conversations', '*', '*.jsonl')
-        files = glob.glob(pattern)
-    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-
-    found = []
-    for path in files[:40]:
-        hit = None
-        try:
-            for record in _iter_messages(path):
-                if not _is_form_message(record, fence_id):
-                    continue
-                hit = (path, record, record['content'])
-        except Exception:  # noqa: BLE001
-            continue
-        if hit:
-            found.append(hit)
-            if len(found) >= limit:
-                break
-    return found
+def extract_block(text):
+    """Return the fenced lines of the form block, plus how many lines surround it."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.lstrip().startswith('```widget ')), None)
+    if start is None:
+        return None, len(lines)
+    end = next((j for j in range(start + 1, len(lines)) if lines[j].strip() == '```'), None)
+    if end is None:
+        return None, len(lines)
+    return lines[start:end + 1], len(lines) - (end + 1 - start)
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('--last', type=int, default=1, help='how many recent messages to inspect')
-    parser.add_argument('--fence-id', default=FENCE_ID)
-    parser.add_argument('--json', action='store_true', help='emit JSON only')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--form', type=Path, required=True)
+    parser.add_argument('--conversation', type=Path, help='the current Accio conversation log, if known')
     args = parser.parse_args()
-
-    messages = find_messages(args.last, args.fence_id)
-    if not messages:
-        print('NO MESSAGE FOUND: no assistant message with a widget fence in ~/.accio/accounts/*/conversations')
+    try:
+        expected = args.form.read_text(encoding='utf-8-sig')
+        problems, _ = check_block(expected, syntax_check=False)
+        if problems:
+            print('SENT UNVERIFIED: invalid expected form: ' + ' | '.join(problems))
+            return 3
+        payload = PAYLOAD_RE.search(expected)
+        case_id = json.loads(payload[1])['case_id']
+        marker = '"case_id":' + json.dumps(case_id, ensure_ascii=False)
+        paths = [args.conversation] if args.conversation else conversations()
+        received = find_reply(paths, marker)
+    except (OSError, KeyError, ValueError) as exc:
+        print('SENT UNVERIFIED: %s' % exc)
         return 3
 
-    results = []
-    for path, record, text in messages:
-        block = _block_of(text)
-        problems, info = check_block(block, syntax_check=False) if block else (['no block found'], {})
-        id_hit = ('```widget ' + args.fence_id) in text
-        results.append({
-            'file': path,
-            'name': record.get('name'),
-            'ts': record.get('ts') or record.get('createdAt'),
-            'message_chars': len(text),
-            'block_chars': len(block or ''),
-            'fence_line': (block or '').split('\n', 1)[0],
-            'expected_fence_id': args.fence_id,
-            'contains_expected_fence': id_hit,
-            'problems': problems,
-            'verdict': 'SENT OK' if not problems else 'SENT BROKEN',
-            'info': info if isinstance(info, dict) else str(info),
-        })
-
-    if args.json:
-        print(json.dumps(results, ensure_ascii=False, indent=2))
-    else:
-        print('client ver  :', client_version(), '| python', sys.version.split()[0])
-        for item in results:
-            print('-' * 68)
-            print('file        :', os.path.basename(item['file']))
-            print('agent       :', item['name'], '| ts', item['ts'])
-            print('msg chars   :', item['message_chars'], '| block chars', item['block_chars'])
-            print('fence line  :', repr(item['fence_line']))
-            print('fence id ok :', 'yes' if item['contains_expected_fence'] else 'NO')
-            print('verdict     :', item['verdict'])
-            for problem in item['problems']:
-                print('  problem   :', problem)
-        print('-' * 68)
-        print(results[0]['verdict'])
-
-    return 0 if results[0]['verdict'] == 'SENT OK' else 1
+    if received is None:
+        print('SENT UNVERIFIED: no Accio reply found for this case')
+        return 3
+    received = received.replace('\r\n', '\n').strip('\n')
+    fence = next((line for line in received.splitlines() if '```widget' in line), '(missing)')
+    print('case: %s | fence line: %r' % (case_id, fence))
+    block, extra = extract_block(received)
+    if block is None:
+        print('SENT BROKEN: reply has no closed widget block')
+        return 1
+    if block != expected.replace('\r\n', '\n').strip('\n').splitlines():
+        print('SENT BROKEN: actual reply differs from the generated form')
+        return 1
+    if extra:
+        print('SENT OK: block matches; %d line(s) of other text in the same reply, send the block alone next time' % extra)
+        return 0
+    print('SENT OK: reply matches the generated form; display and submission are separate')
+    return 0
 
 
 if __name__ == '__main__':

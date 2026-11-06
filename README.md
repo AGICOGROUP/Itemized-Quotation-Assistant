@@ -40,21 +40,23 @@ item quote           = fixed-markup items first; remainder allocated pro rata by
 SKILL.md                        workflow, presentation contract, stability locks, pricing rules
 contracts/form-presentation.md  machine-readable contract (fence, size cap, slots, hashes)
 templates/                      form template + two fingerprint locks
-scripts/                        render, verify, decode, bind, calculate, report, Excel, tests
+scripts/                        preflight, render, verify, decode, bind, calculate, report, Excel, tests
 references/                     input compatibility rules and parameter reference
+agents/openai.yaml              host interface manifest (display name, short description)
 INSTALL.md                      installation and self-check
-MANIFEST.sha256                 checksums for every file
+MANIFEST.sha256                 checksums for every shipped file
 ```
 
 ## Quick start
 
 ```bash
 cd scripts
-python check_contract.py                                        # expect CONTRACT OK
-python -m unittest test_grouped test_workflow test_submission   # expect 34 tests OK
+python preflight.py --phase form                                  # expect PREFLIGHT OK
+python check_contract.py                                          # expect CONTRACT OK
+python -m unittest test_grouped test_workflow test_submission     # expect 34 tests OK
 ```
 
-Requirements: Python 3.9+ (standard library only), `openpyxl` for Excel export, `node` for the form's syntax self-check (skipped if absent).
+Requirements: Python 3.9+ (standard library only), `openpyxl` for Excel export (checked and installed at the export phase, not up front), `node` for the form's syntax self-check (skipped if absent).
 
 Full steps in [INSTALL.md](INSTALL.md).
 
@@ -62,7 +64,7 @@ Full steps in [INSTALL.md](INSTALL.md).
 
 - **Covers:** cost-table transcription checks, per-item markup, export-tax refund, exchange rate (live or fixed), Excel delivery.
 - **Does not promise:** closing price, customer acceptance, realized margin. The tool computes what you decided, precisely and visibly.
-- **Host boundary:** the confirmation form is a host-rendered widget; it renders only inside the client that generated it, and degrades to source code if forwarded elsewhere. The project deliberately does not work around this with a second presentation medium — one form, one shape, no alternatives.
+- **Host boundary:** one template, three outputs. `--host accio` emits the widget block, `--host codex` an inline fragment, `--host browser` the identical form as a self-contained HTML file for clients that cannot embed a widget or whose size cap the block exceeds. All three share one shape, one field set and one submission protocol, and none of them is hand-written. A widget block still renders only in the client that generated it, so a forwarded one shows as source — that is the case the offline fallback exists for.
 - **Input shape:** an itemized cost table (Excel/CSV or screenshot). Lump-sum quotes with no breakdown must be split at subsystem or process level first.
 
 ## Tests

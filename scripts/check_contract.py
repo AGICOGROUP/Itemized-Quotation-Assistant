@@ -23,7 +23,8 @@ SAMPLE = {'case_id': 'contract-sample',
 
 
 def sha256(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    from render_form import template_bytes
+    return hashlib.sha256(template_bytes(Path(path))).hexdigest()
 
 
 def values(contract_path):
@@ -31,7 +32,7 @@ def values(contract_path):
     return dict(re.findall(r'^([A-Z0-9_]+)=(\S+)$', text, re.M))
 
 
-def check(contract_path=None):
+def check(contract_path=None, syntax_check=True):
     """Return (problems, info). Problems are fatal; info describes what was verified."""
     problems, info = [], {}
     path = Path(contract_path) if contract_path else ROOT / 'contracts' / 'form-presentation.md'
@@ -68,7 +69,7 @@ def check(contract_path=None):
     if int(vals['MAX_CHARS']) != MAX_BLOCK:
         problems.append('size cap differs: contract %s vs code %s' % (vals['MAX_CHARS'], MAX_BLOCK))
     src = template.read_text(encoding='utf-8') if template.exists() else ''
-    m = re.search(r'Math\.max\((\d+),presetCount\)', src)
+    m = re.search(r'k<(\d+);k\+\+\)addRule\(', src)
     if not m:
         problems.append('template no longer creates a fixed slot count')
     elif m.group(1) != vals['SLOTS']:
@@ -81,7 +82,7 @@ def check(contract_path=None):
         if (ROOT / 'scripts' / extra).exists():
             problems.append('alternative medium generator present: scripts/%s' % extra)
     try:
-        block, _ = build_block(json.loads(json.dumps(SAMPLE)))
+        block, _ = build_block(json.loads(json.dumps(SAMPLE)), syntax_check=syntax_check)
     except Exception as exc:                     # the generator refuses to run at all
         problems.append('sample render failed: %s' % exc)
         return problems, info

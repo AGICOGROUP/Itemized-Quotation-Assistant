@@ -1,12 +1,12 @@
 # 对话内分类表单契约
 
-新任务统一使用 `templates/confirm-form.html`（由 `render_form.py` 填充，形状唯一、不可手写改造）。保留双列全局参数：成本、税费、佣金、币种、汇率、额外费用及补充说明全部放在上方；整体目标利润率与下方特殊规则之间用一条 hr 分割线；以 h3 显示“整体目标利润率”“特殊加价率 1–6”。每个特殊加价率上方填比例，下方点击展开勾选多个项目；固定六个槽位，一行一条（左列比率、右列适用项目），4/5/6 接在下方；链式解锁：3 填了激活 4，4 填了激活 5，5 填了激活 6，清空则下游重新灰显（已有内容的槽位不灰、不丢数据）。不提供手工“添加”按钮。全部在当前对话的同一个表单中，只用一个“确认参数并计算”按钮。预勾选项目来自 draft 的 categories/item_settings，未勾选的自动归入通用分摊。不能用浏览器侧栏、系统窗口、逐题问答代替。
+新任务统一使用 `templates/confirm-form.html`（由 `render_form.py` 填充，形状唯一、不可手写改造）。保留双列全局参数：成本、税费、佣金、币种、汇率、额外费用及补充说明全部放在上方；整体目标利润率与下方特殊规则之间用一条 hr 分割线；以 h3 显示“整体目标利润率”“特殊加价率 1–6”。每个特殊加价率上方填比例，下方点击展开勾选多个项目；固定六个槽位，一行一条（左列比率、右列适用项目），4/5/6 接在下方；链式解锁：3 填了激活 4，4 填了激活 5，5 填了激活 6，清空则下游重新灰显（已有内容的槽位不灰、不丢数据）。不提供手工“添加”按钮。全部在当前对话的同一个表单中，只用一个“确认参数并计算”按钮。预勾选项目来自 draft 的 categories/item_settings，未勾选的自动归入通用分摊。Accio 与 Codex 通过各自的入口显示同一张表。宿主无法内嵌时，允许打开由同一生成器输出的离线表单，确认后将提交码发回原对话。
 
 ## 草稿
 
 每次从本次资料建立唯一case_id。items每行必须包含唯一稳定id、name、cost（十进制元字符串）；保留来源与数量信息。仅明细计价，小计和父级不重复计入。缺价、总额冲突及不明计价范围仍须解决。
 
-fields包含cost_total（只读当次合计）、cost_basis（人民币；可退税项含税）、margin（25）、commission（7.5）、vat（13）、refund（13）、allocation（按厂家原成本比例分摊）、currencies（人民币、美元）、fx_rule（实时：中行美元现汇买入价）、extra_cost（0）、summary（选填）。每项有key、label、value、type、required，可有readonly/max/options。数字采用number，百分比填25而非0.25，税率上限100。需要时增加source_kind确认supplier_cost。未知不能填假默认。
+fields包含cost_total（只读当次合计）、cost_basis（人民币；可退税项含税）、margin（25）、commission（7.5）、vat（13）、refund（13）、allocation（按厂家原成本比例分摊）、currencies（人民币、美元）、fx_rule（实时：中行美元现汇买入价）、extra_cost（0）、summary（选填）。每项有key、label、value、type、required，可有readonly/max/options。数字采用number，百分比填25而非0.25，税率上限100。同时提供 source_kind。只有确认是厂家采购成本才预填 supplier_cost，未知留空由用户填写。
 
 categories是类别数组，每个对象有id、name、mode、markup，例如：
 ```json

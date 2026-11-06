@@ -5,68 +5,67 @@ markers, and JavaScript syntax. Run this on the exact file you are about to past
 """
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 FENCE_ID = 'quotation-confirm-form-v4'
 MAX_BLOCK = 12000
+PAYLOAD_RE = re.compile(r'^const D=(\{[^\n]*\});$', re.M)
 
 
-def check_block(text, syntax_check=True):
-    """Return (problems, info) for a block that is about to be sent or shared."""
+def check_block(text, syntax_check=True, max_chars=MAX_BLOCK):
+    '''Validate framing, the data payload and optionally JavaScript syntax.'''
     problems = []
+    lines = text.splitlines()
+    expected = '```widget ' + FENCE_ID
+    if not lines or lines[0] != expected:
+        problems.append('first line must be %s' % expected)
+    if not lines or lines[-1] != '```' or text.count('```') != 2:
+        problems.append('expected exactly two fences and a standalone closing fence')
+    if max_chars is not None and len(text) > max_chars:
+        problems.append('block is %d chars, over the %d-char render limit' % (len(text), max_chars))
 
-    first = text.split('\n', 1)[0]
-    if not first.startswith('```widget ' + FENCE_ID):
-        problems.append('first line must be "```widget %s", got %r' % (FENCE_ID, first[:60]))
-    if not text.rstrip().endswith('```'):
-        problems.append('block must end with a closing fence')
-    if text.count('```') != 2:
-        problems.append('block must contain exactly two fences, found %d' % text.count('```'))
-    if len(text) > MAX_BLOCK:
-        problems.append('block is %d chars, over the %d-char render limit' % (len(text), MAX_BLOCK))
-
-    for marker in ('__COUNT__', '__COST_TOTAL__', '__NOTE__', '/*QUOTATION_PAYLOAD*/'):
-        if marker in text:
-            problems.append('unreplaced template marker: ' + marker)
-
-    script = ''
-    if '<script>' in text and '</script>' in text:
-        script = text[text.find('<script>') + 8:text.rfind('</script>')]
-        if script.count('{') != script.count('}'):
-            problems.append('script braces are unbalanced: %d open, %d close'
-                            % (script.count('{'), script.count('}')))
-        for ch_open, ch_close in (('(', ')'), ('[', ']')):
-            if script.count(ch_open) != script.count(ch_close):
-                problems.append('script %s%s unbalanced: %d vs %d'
-                                % (ch_open, ch_close, script.count(ch_open), script.count(ch_close)))
-        node = shutil.which('node') if syntax_check else None
-        if node:
-            with tempfile.TemporaryDirectory() as tmp:
-                js = Path(tmp) / 'form.js'
-                js.write_text(script, encoding='utf-8')
-                run = subprocess.run([node, '--check', str(js)], capture_output=True, text=True)
-                if run.returncode != 0:
-                    problems.append('javascript syntax error: ' + (run.stderr.strip().splitlines() or ['?'])[-1])
-        elif syntax_check:
-            problems.append('warning: node not found, syntax was only brace-checked')
+    payload = {}
+    match = PAYLOAD_RE.search(text)
+    if not match:
+        problems.append('form payload missing')
     else:
-        problems.append('script block missing')
-
-    payload = None
-    if 'const D=' in text:
-        raw = text[text.find('const D=') + 8:text.find('};', text.find('const D=')) + 1]
         try:
-            payload = json.loads(raw)
+            data = json.loads(match[1])
+            if not isinstance(data, dict):
+                raise ValueError('expected an object')
+            payload = data
         except ValueError as exc:
             problems.append('payload is not valid JSON: %s' % exc)
 
+    scaffold = PAYLOAD_RE.sub('', text)
+    for marker in ('__COUNT__', '__COST_TOTAL__', '__NOTE__', '/*QUOTATION_PAYLOAD*/'):
+        if marker in scaffold:
+            problems.append('unreplaced template marker: ' + marker)
+
+    script = re.search(r'<script>(.*?)</script>', text, re.S)
+    if not script:
+        problems.append('script block missing')
+    elif syntax_check:
+        node = shutil.which('node')
+        if not node:
+            problems.append('warning: node not found, JavaScript syntax check skipped')
+        else:
+            try:
+                run = subprocess.run([node, '--check', '-'], input=script[1].encode('utf-8'),
+                                     capture_output=True, timeout=3)
+                if run.returncode:
+                    error = run.stderr.decode('utf-8', 'replace').strip()
+                    problems.append('javascript syntax error: ' + error)
+            except (OSError, subprocess.TimeoutExpired):
+                problems.append('warning: Node could not run, JavaScript syntax check skipped')
+
     info = 'items=%d presets=%d nf=%d chars=%d' % (
-        len((payload or {}).get('items', [])), len((payload or {}).get('presets', [])),
-        len((payload or {}).get('nf', [])), len(text))
+        len(payload.get('items', [])), len(payload.get('presets', [])),
+        len(payload.get('nf', [])), len(text))
     return problems, info
 
 

@@ -72,7 +72,10 @@ def decode(message, draft):
     categories = [dict(id='general', name='通用分摊类', mode='proportional', markup='0')]
     assigned = set()
 
-    for number, token in enumerate([t for t in groups_text.split(';') if t.strip()], start=1):
+    tokens = [token for token in groups_text.split(';') if token.strip()]
+    if len(tokens) > 6:
+        raise ValueError('At most six markup groups are supported')
+    for number, token in enumerate(tokens, start=1):
         head, sep, bitmap = token.rpartition(':')
         if not sep or not head:
             raise ValueError('Bad group token: ' + token)

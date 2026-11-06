@@ -1,0 +1,3 @@
+interface:
+  display_name: "出口项目分项报价"
+  short_description: "结合退税、佣金、目标利润和实时汇率计算项目分项报价"

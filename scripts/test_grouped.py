@@ -49,8 +49,8 @@ class GroupedTests(unittest.TestCase):
             self.assertEqual(len(result['items']),n)
             with tempfile.TemporaryDirectory() as p:
                 src=Path(p)/'draft.json';out=Path(p)/'form.html';src.write_text(json.dumps(d),encoding='utf8')
-                proc=subprocess.run([sys.executable,str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
-                if n==10:
+                proc=subprocess.run([sys.executable,'-X','utf8',str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+                if n==10 or proc.returncode==0:
                     self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
                     block=out.read_text(encoding='utf8')
                     self.assertTrue(block.startswith('```widget quotation-confirm-form-v4\n'))
@@ -65,7 +65,7 @@ class GroupedTests(unittest.TestCase):
         d,_=fixture(200)
         with tempfile.TemporaryDirectory() as p:
             src=Path(p)/'draft.json';out=Path(p)/'form.html';src.write_text(json.dumps(d),encoding='utf8')
-            proc=subprocess.run([sys.executable,str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+            proc=subprocess.run([sys.executable,'-X','utf8',str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
             self.assertNotEqual(proc.returncode,0)
             self.assertIn('render limit',proc.stderr)
     def test_six_slots_and_lock(self):
@@ -73,11 +73,11 @@ class GroupedTests(unittest.TestCase):
         d,_=fixture(10)
         with tempfile.TemporaryDirectory() as p:
             src=Path(p)/'draft.json';out=Path(p)/'form.html';src.write_text(json.dumps(d),encoding='utf8')
-            proc=subprocess.run([sys.executable,str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+            proc=subprocess.run([sys.executable,'-X','utf8',str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
             self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
             block=out.read_text(encoding='utf8')
         self.assertIn('<div id="rules"></div>',block)
-        self.assertIn("for(let k=0;k<Math.max(6,presetCount);k++)addRule();",block)
+        self.assertIn("for(let k=0;k<6;k++)addRule();",block)
         self.assertIn('function lock()',block)
         self.assertIn("wrap.className='row2'",block)
         self.assertIn("o.off=!String(rows[i-1].input.value).trim()&&!String(o.input.value).trim()&&!o.ids.size;",block)
@@ -92,7 +92,7 @@ class GroupedTests(unittest.TestCase):
                 s['tax_mode']='none'
         with tempfile.TemporaryDirectory() as p:
             src=Path(p)/'draft.json';out=Path(p)/'form.html';src.write_text(json.dumps(d),encoding='utf8')
-            subprocess.run([sys.executable,str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],check=True,capture_output=True)
+            subprocess.run([sys.executable,'-X','utf8',str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],check=True,capture_output=True)
             block=out.read_text(encoding='utf8')
         self.assertIn('Array.from(nfChecks.keys())',block)
         self.assertNotIn('[].slice.call(nfChecks.keys())',block)
@@ -122,7 +122,7 @@ class GroupedTests(unittest.TestCase):
 
     def test_contract_binds_presentation(self):
         """The contract, the template and the locks must agree, and only one medium exists."""
-        r = subprocess.run([sys.executable, str(ROOT/'scripts'/'check_contract.py')],
+        r = subprocess.run([sys.executable, '-X', 'utf8', str(ROOT/'scripts'/'check_contract.py')],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('CONTRACT OK', r.stdout)
@@ -138,7 +138,7 @@ class GroupedTests(unittest.TestCase):
             c.write_text(re.sub(r'^TEMPLATE_SHA256=\S+$', 'TEMPLATE_SHA256=' + '0'*64,
                                 c.read_text(encoding='utf-8'), count=1, flags=re.M), encoding='utf-8')
             src = Path(tmp)/'draft.json'; src.write_text(json.dumps(d), encoding='utf8')
-            r = subprocess.run([sys.executable, str(gen), '--draft', str(src), '--output', str(Path(tmp)/'f.txt')],
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(gen), '--draft', str(src), '--output', str(Path(tmp)/'f.txt')],
                                capture_output=True, text=True, encoding='utf-8')
             self.assertNotEqual(r.returncode, 0)
             self.assertIn('Contract template hash disagrees', r.stderr)
@@ -152,7 +152,7 @@ class GroupedTests(unittest.TestCase):
             tpl=Path(p)/'templates'/'confirm-form.html'
             tpl.write_text(tpl.read_text(encoding='utf8').replace("wrap.className='row2'","wrap.className='row3'"),encoding='utf8')
             src=Path(p)/'draft.json';out=Path(p)/'form.txt';src.write_text(json.dumps(d),encoding='utf8')
-            proc=subprocess.run([sys.executable,str(script),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+            proc=subprocess.run([sys.executable,'-X','utf8',str(script),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
             self.assertNotEqual(proc.returncode,0)
             self.assertIn('template changed',proc.stderr)
             self.assertFalse(out.exists())
@@ -166,7 +166,7 @@ class GroupedTests(unittest.TestCase):
             c=Path(p)/'contracts'/'form-presentation.md'
             c.write_text(re.sub(r'^SHAPE_SHA256=\S+$','SHAPE_SHA256='+'0'*64,c.read_text(encoding='utf8'),count=1,flags=re.M),encoding='utf8')
             src=Path(p)/'draft.json';out=Path(p)/'form.txt';src.write_text(json.dumps(d),encoding='utf8')
-            proc=subprocess.run([sys.executable,str(script),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+            proc=subprocess.run([sys.executable,'-X','utf8',str(script),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
             self.assertNotEqual(proc.returncode,0)
             self.assertIn('shape differs',proc.stderr)
             self.assertFalse(out.exists())
@@ -180,7 +180,7 @@ class GroupedTests(unittest.TestCase):
             d,_=fixture(n)
             with tempfile.TemporaryDirectory() as p:
                 src=Path(p)/'draft.json';out=Path(p)/'form.txt';src.write_text(json.dumps(d),encoding='utf8')
-                proc=subprocess.run([sys.executable,str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
+                proc=subprocess.run([sys.executable,'-X','utf8',str(ROOT/'scripts/render_form.py'),'--draft',str(src),'--output',str(out)],capture_output=True,text=True,encoding='utf-8')
                 if proc.returncode==0:
                     shapes.add(sha(shape_of(out.read_text(encoding='utf8'))))
         self.assertEqual(len(shapes),1,shapes)

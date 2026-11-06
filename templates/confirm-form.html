@@ -22,41 +22,43 @@
 #qf section.off summary{cursor:not-allowed;color:var(--color-text-tertiary,#9aa4b2)}
 </style>
 <div id="qf">
-  <div class="grid">
-    <label class="f">成本合计（元，共__COUNT__项明细之和）<input class="i" id="f_cost_total" type="number" value="__COST_TOTAL__" readonly></label>
-    <label class="f">成本口径<input class="i" id="f_cost_basis" type="text" value="人民币；可退税项含税" readonly></label>
-    <label class="f">进项税率（%，货物类）<input class="i" id="f_vat" type="number" min="0" step="any" value="13"></label>
-    <label class="f">假定退税率（%，按未税成本）<input class="i" id="f_refund" type="number" min="0" step="any" value="13"></label>
-  </div>
-  <h3>整体目标利润率</h3>
-  <div class="grid">
-    <label class="f">目标利润率（%，占最终销售额）<input class="i" id="f_margin" type="number" min="0" step="any" value="25"></label>
-    <label class="f">佣金率（%，占销售额）<input class="i" id="f_commission" type="number" min="0" step="any" value="7.5"></label>
-  </div>
-  <h3>不可退税项目（点击选择，可多选）</h3>
-  <div class="list" id="nfList"></div>
-  <label class="f" style="margin-top:8px">不可退税金额（元，自动合计）<input class="i" id="f_nfTotal" type="number" readonly value="0"></label>
-  <p class="note">__NOTE__</p>
-  <hr>
-  <div id="rules"></div>
-  <div class="grid">
-    <label class="f">额外费用（元，运费、到港费等）<input class="i" id="f_extra_cost" type="number" min="0" step="any" value="0"></label>
-    <label class="f">剩余报价分摊规则<input class="i" id="f_allocation" type="text" value="按厂家原成本比例分摊" readonly></label>
-    <label class="f">报价币种<input class="i" id="f_currencies" type="text" value="人民币、美元" readonly></label>
-    <label class="f">汇率方式<select class="i" id="fxMode"><option value="realtime">实时：中行美元现汇买入价</option><option value="fixed">手动固定汇率（不联网）</option></select></label>
-    <label class="f">固定汇率（CNY per USD，选手动时填写）<input class="i" id="fxRate" type="number" min="0" step="any" value="" disabled></label>
-    <label class="f">价格口径（supplier_cost=厂家采购成本）<input class="i" id="f_source_kind" type="text" value="supplier_cost"></label>
-    <label class="f">补充说明（选填）<input class="i" id="f_summary" type="text" value=""></label>
-  </div>
-  <p class="err" id="err"></p>
-  <button type="button" id="go">确认参数并计算</button>
-  <p class="ok" id="status"></p>
-  <code id="dumpCode" hidden></code>
+<div class="grid">
+<label class="f">成本合计（元，共__COUNT__项明细之和）<input class="i" id="f_cost_total" type="number" value="__COST_TOTAL__" readonly></label>
+<label class="f">成本口径<input class="i" id="f_cost_basis" type="text" value="人民币；可退税项含税" readonly></label>
+<label class="f">进项税率（%，货物类）<input class="i" id="f_vat" type="number" min="0" step="any" value="13"></label>
+<label class="f">假定退税率（%，按未税成本）<input class="i" id="f_refund" type="number" min="0" step="any" value="13"></label>
+</div>
+<h3>整体目标利润率</h3>
+<div class="grid">
+<label class="f">目标利润率（%，占最终销售额）<input class="i" id="f_margin" type="number" min="0" step="any" value="25"></label>
+<label class="f">佣金率（%，占销售额）<input class="i" id="f_commission" type="number" min="0" step="any" value="7.5"></label>
+</div>
+<h3>不可退税项目（点击选择，可多选）</h3>
+<div class="list" id="nfList"></div>
+<label class="f" style="margin-top:8px">不可退税金额（元，自动合计）<input class="i" id="f_nfTotal" type="number" readonly value="0"></label>
+<p class="note">__NOTE__</p>
+<hr>
+<div id="rules"></div>
+<div class="grid">
+<label class="f">额外费用（元，运费、到港费等）<input class="i" id="f_extra_cost" type="number" min="0" step="any" value="0"></label>
+<label class="f">剩余报价分摊规则<input class="i" id="f_allocation" type="text" value="按厂家原成本比例分摊" readonly></label>
+<label class="f">报价币种<input class="i" id="f_currencies" type="text" value="人民币、美元" readonly></label>
+<label class="f">汇率方式<select class="i" id="fxMode"><option value="realtime">实时：中行美元现汇买入价</option><option value="fixed">手动固定汇率（不联网）</option></select></label>
+<label class="f">固定汇率（CNY per USD，选手动时填写）<input class="i" id="fxRate" type="number" min="0" step="any" value="" disabled></label>
+<label class="f">价格口径（supplier_cost=厂家采购成本）<input class="i" id="f_source_kind" type="text" value=""></label>
+<label class="f">补充说明（选填）<input class="i" id="f_summary" type="text" value=""></label>
+</div>
+<p class="err" id="err" role="alert"></p>
+<button type="button" id="go">确认参数并计算</button>
+<p class="ok" id="status" aria-live="polite"></p>
+<code id="dumpCode" hidden></code>
 </div>
 <script>
 (function(){
 const D=/*QUOTATION_PAYLOAD*/ {};
 const MAXLEN=500;
+D.items=D.items.map(([id,name,cost])=>({id,name,cost}));
+['margin','commission','vat','refund','extra_cost','source_kind','summary'].forEach((k,i)=>document.getElementById('f_'+k).value=D.v[i]);
 const byId={};D.items.forEach(function(i){byId[i.id]=i;});
 const val=function(k){return document.getElementById('f_'+k).value;};
 const b64url=function(bytes){let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
@@ -115,8 +117,7 @@ o.checks.forEach(function(c){c.disabled=o.off;});
 });
 refresh();
 }
-const presetCount=(D.presets||[]).length;
-for(let k=0;k<Math.max(6,presetCount);k++)addRule();
+for(let k=0;k<6;k++)addRule();
 (D.presets||[]).forEach(function(p,i){
 const r=rows[i];if(!r)return;
 r.input.value=String(p.rate);
@@ -124,10 +125,6 @@ r.input.value=String(p.rate);
 });
 rows.forEach(function(r){r.input.oninput=lock;});
 lock();
-function fxValue(){
-if(fxMode.value!=='fixed')return '实时：中行美元现汇买入价';
-return '固定汇率 1 USD = '+fxRate.value+' CNY（用户指定，未联网查询）';
-}
 function encode(){
 const groups=[];
 rows.forEach(function(r){
@@ -137,27 +134,37 @@ if(v===''||!isFinite(Number(v))||Number(v)<0)throw new Error('请填写特殊加
 groups.push(Number(v)+':'+bitmap(r.ids));
 });
 const nf=new Set(Array.from(nfChecks.keys()).filter(function(k){return nfChecks.get(k).checked;}));
-const p={cost_total:val('cost_total'),cost_basis:val('cost_basis'),margin:val('margin'),commission:val('commission'),vat:val('vat'),refund:val('refund'),allocation:val('allocation'),currencies:val('currencies'),fx_rule:fxValue(),extra_cost:val('extra_cost'),source_kind:val('source_kind'),summary:val('summary')};
 const mode=fxMode.value==='fixed'?'F':'R';
-if(mode==='F'){const v=fxRate.value;if(v===''||!isFinite(Number(v))||Number(v)<=0)throw new Error('手动固定汇率需填写大于 0 的 CNY/USD 数值');}
-const msg=['QP2',D.case_id,p.margin,p.commission,p.vat,p.refund,p.extra_cost,p.source_kind,text64(p.summary),groups.join(';'),bitmap(nf),mode,mode==='F'?fxRate.value:''].join('|');
-return {msg:msg,p:p};
+if(mode==='F'&&(!Number.isFinite(+fxRate.value)||+fxRate.value<=0))throw new Error('请填写大于 0 的固定汇率');
+return ['QP2',D.case_id,val('margin'),val('commission'),val('vat'),val('refund'),val('extra_cost'),val('source_kind'),text64(val('summary')),groups.join(';'),bitmap(nf),mode,mode==='F'?fxRate.value:''].join('|');
 }
-document.getElementById('go').onclick=function(){
+const go=document.getElementById('go');
+go.onclick=async function(){
 const err=document.getElementById('err'),st=document.getElementById('status'),code=document.getElementById('dumpCode');
-err.textContent='';st.textContent='';code.textContent='';code.hidden=true;
-let built;
+err.textContent=st.textContent=code.textContent='';code.hidden=true;
+let msg;
 try{
-if(Number(val('margin'))+Number(val('commission'))>=100)throw new Error('利润率与佣金率之和必须小于 100%');
-if(Number(val('refund'))>Number(val('vat')))throw new Error('假定退税率不得高于进项税率');
-if(val('source_kind').trim()!=='supplier_cost')throw new Error('本表若不是厂家采购成本，请先说明口径，不要在此叠加利润');
-built=encode();
-if(built.msg.length>MAXLEN)throw new Error('提交串 '+built.msg.length+' 字符，超过宿主上限 '+MAXLEN+'，请精简补充说明');
-if(typeof window.__widgetSendMessage!=='function')throw new Error('当前宿主不支持表单提交，尚未确认也未计算');
-}catch(e){err.textContent=e.message;if(built){code.textContent=built.msg;code.hidden=false;}return;}
-window.__widgetSendMessage(built.msg);
-st.textContent='已提交（'+built.msg.length+' 字符，汇率'+(fxMode.value==='fixed'?'手动固定 '+fxRate.value:'实时查询')+'），等待核算。若未自动开始，请把下方提交串发给助手。';
-code.textContent=built.msg;code.hidden=false;
+for(const k of ['margin','commission','vat','refund','extra_cost']){
+const el=document.getElementById('f_'+k);
+if(!el.value||!el.validity.valid||!Number.isFinite(Number(el.value)))throw new Error('请填写有效的'+el.parentElement.firstChild.textContent);
+}
+if(+val('margin') + +val('commission')>=100)throw new Error('利润率与佣金率之和必须小于 100%');
+if(+val('vat')>100||+val('refund')>+val('vat'))throw new Error('请核对进项税率和假定退税率');
+if(val('source_kind')!=='supplier_cost')throw new Error('请确认价格口径为厂家采购成本（supplier_cost）后再提交');
+msg=encode();
+if(msg.length>MAXLEN)throw new Error('提交超过 500 字符，请精简补充说明');
+}catch(e){err.textContent=e.message;return;}
+code.textContent=msg;code.hidden=false;
+st.textContent='如未看到提交消息，请将下方提交码发回原对话。';
+go.disabled=true;
+try{
+if(D.h==='codex'&&window.openai&&typeof window.openai.sendFollowUpMessage==='function'){
+await window.openai.sendFollowUpMessage({prompt:msg,title:'确认报价参数'});
+}else if(!D.h&&typeof window.__widgetSendMessage==='function'){
+await window.__widgetSendMessage(msg);
+}
+}catch(e){err.textContent='自动提交失败，表单内容已保留。';}
+finally{go.disabled=false;}
 };
 })();
 </script>

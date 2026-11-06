@@ -1,122 +1,41 @@
 ---
-name: "[Harvest] 出口项目分项报价与Excel导出"
-description: 根据厂家成本表制作出口项目分项报价；通过对话内Widget表单确认参数（含可选汇率模式），计算并展示原价、加价规则及最终报价，最后生成包含分项明细、参数设置及计算过程的Excel汇总表供用户下载。严格绑定单一表单呈现方式，禁止使用HTML或其他替代格式。
+name: "[Harvest] 出口项目分项报价助手"
+description: 根据厂家成本表或截图制作出口项目分项报价。先显示可编辑的参数确认表，收集分项加价和退税范围，再按用户确认的参数计算并导出报告和 Excel。支持 Accio 与 Codex，优化了表单兼容性及生成速度。
 created_by: main_agent
 ---
-## 0. 环境自检（每次开工先跑，不过不许开工）
-
-```bash
-python scripts/preflight.py
-```
-
-- 必须看到 `PREFLIGHT OK` 才继续。看到 `PREFLIGHT BLOCKED` 就停：把缺项原样告诉用户，不许"先跑再说"，也不许用别的方式绕。
-- 它逐项检查：Python ≥3.9、技能文件是否齐全、模板与契约是否一致（模板指纹 + 形状指纹）、技能目录是否可写、`openpyxl`（缺了自动 `pip install`）、`node`（缺了降级为跳过 JS 语法自检）。
-- `--no-fix` 只检查不安装。自动安装只放开 `openpyxl` 一项，其余缺项必须人工处理。
-- 客户端版本只打印不判定：**渲染能力命令行测不出来**，只能靠表单发出后的 `verify_sent.py` 判定（见 Workflow 步骤 2）。
-
 ## Workflow
-1. **读取与标准化**：读取{cost_file}或{screenshot}，按 [references/input-compatibility.md](references/input-compatibility.md) 转录。逐项求和必须与表内小计/合计对上；对不上先说明差额，不得自行抹平。产出 `work/{case_id}/draft.json`，其中 `fields`、`items`、`categories`、`item_settings` 四部分齐全。
-2. **生成确认表单**：执行 `python scripts/render_form.py --draft draft.json --output form.txt`。渲染器在写文件前自动运行内部校验（围栏、长度、占位符、括号配平、`node --check`），任何一项不过就报错且**不产出文件**。脚本输出**完整的 widget 代码块**（首行 ```widget quotation-confirm-form-v4，末行 ```）。将 `form.txt` 全文原样贴入回复：用工具读文件后整段复制，**禁止在回复里重新手打或改写任何字符**。发前可再跑 `python scripts/verify_form.py --form form.txt` 复核，看到 `FORM OK`。
-   - **唯一呈现方式**：表单必须且只能通过 `quotation-confirm-form-v4` Widget 呈现。严禁生成 HTML 页面、图片或其他格式的表单。
-   - 禁止手写、改写、精简、重排表单；禁止更换标识符或改成裸 ```widget。
-   - 表单外观由 `templates/confirm-form.html` 唯一决定，不随项目变化；变化的只有项目明细、成本合计、预置加价组和税额提示。
-   - 生成后跑 `python scripts/check_contract.py`，必须看到 `CONTRACT OK`：它核对 [contracts/form-presentation.md](contracts/form-presentation.md) 里的围栏、上限、槽位数与两个哈希是否与模板、锁文件、样例渲染一致。
-   - 脚本对整块长度做硬校验（上限 12,000 字符），超限直接报错并且不产出文件。此时**不要**硬发，按脚本提示减少行数或改用汇总口径。
-   - **发送后必须回读校验**：贴出表单后立刻跑 `python scripts/verify_sent.py`。它读宿主持久化的会话记录（`~/.accio/accounts/*/conversations/dm/*.jsonl`），核对**实际发出的那条消息**，而不是 `form.txt`。必须看到 `SENT OK`。
-     - 输出 `SENT BROKEN` 时，看 `fence line` 一行：它打印真实首行。据此改正后重发一次（最多两次）；重发后仍不支持，按 Pitfalls 处理。
-     - 这一步是唯一能发现"文件对、消息错"的手段：围栏被合并进上一句、被列表或引用包裹、被缩进、首行混入全角空格或不可见字符、丢失闭合围栏，在 `form.txt` 里全都看不出来。
-3. **接收确认**：等用户点"确认参数并计算"并回传 QP2 串。用 `scripts/parse_widget_submission.py --draft draft.json --message "@msg.txt" --output submission.json` 解码。不得从自然语言里"猜"参数。
-4. **绑定输入**：`scripts/prepare_input.py --draft draft.json --submission submission.json --user-message-reference "<原始QP2串>" --output-dir .`，产出 `input.json` 与带 SHA256 的 `confirmation.json`。两者不一致时 `quote.py` 会拒绝计算，这是设计行为，不要去改记录。
-5. **汇率**：QP2 末尾 `R` = 实时，取中国银行美元现汇买入价（[牌价页](https://www.boc.cn/sourcedb/whpj/)，记录牌价发布时间与查询时间）；`F` = 用户填的固定汇率，直接采用，不联网。未取到汇率就停，不要用估值。
-6. **计算与交付**：`scripts/quote.py`（带 `--confirmation`）→ `result.json`；`scripts/render_report.py` → 四段汇报；`scripts/render_excel.py` → 三分页 Excel（分项报价 / 参数与汇率 / 计算过程）。汇报顺序固定：总报价 → 本次采用参数 → 总价计算过程 → 最终分项报价及计算表。
+1. **预检和草稿**
+确定当前对话宿主。Accio 使用 accio，支持对话内 Visualize 的 Codex 使用 codex，其他宿主使用 browser。同一案例使用唯一的短 ASCII case_id 和同一份 draft.json。
+运行 `python -X utf8 scripts/preflight.py --phase form --output-dir <案例工作目录>`。看到 PREFLIGHT OK 才生成表单。Python 3.9+ 必需，Node 可选，Excel 依赖到导出时检查。预检验证安装文件、模板契约和案例目录，无法检查宿主是否实际显示了表单。遇到损坏文件，重新解压完整发布包，保留任务草稿。
+按 [输入兼容规范](references/input-compatibility.md) 从本次文件转录，核对明细和合计。明细缺失或合计冲突时先解决。吨单价是舍入后的展示值时，以经确认的总价列计算，重量和显示吨单价留作备查。标题写着报价不能证明是厂家采购成本。草稿保留 `fields`、`items`、`categories`、`item_settings` 及未解决的来源问题。字段契约见 [参数参考](references/parameter-form.md)。未知价格口径填空；税率、利润率和佣金仅按本次明确的值或业务约定预填。相同加价率可合并成一组，保留独立项目选择。
 
-## 表单结构（固定）
+2. **生成并显示确认表**
+使用唯一生成器和锁定模板。生成器校验契约、结构、金额合计、分组及宿主长度限制。正常运行无需额外重复执行 check_contract.py 或 verify_form.py。
+- Accio：`python -X utf8 scripts/render_form.py --host accio --draft <草稿> --output <form.txt>`。将文件里的整个 widget 块原样作为独立回复发出，围栏顶格，前后不要包裹列表、引用、代码块或正文。若宿主日志可读，运行 `python -X utf8 scripts/verify_sent.py --form <form.txt> --conversation <当前日志>`。不知道日志路径时可省略 `--conversation`，脚本按本次 case_id 查找。SENT OK 只表示回复里的表单块与生成文件逐行一致，不证明界面已渲染；块外另带正文时仍判 SENT OK 并提示行数，下次只发块本身。SENT UNVERIFIED 时不能声称已显示。SENT BROKEN 时用同一份文件重发一次。
+- Codex：`python -X utf8 scripts/render_form.py --host codex --draft <草稿> --output <线程可读取的可视化目录>/quotation-confirmation.html`。按 Visualize 的内嵌引用语法显示生成的文件，使用实际绝对路径。按钮走 Codex 的确认消息入口，实际收到 QP2 才算确认。
+- 当前宿主不支持内嵌、显示为源码、回复重发后仍显示失败，或 Accio 表单超过长度上限时，执行 `python -X utf8 scripts/render_form.py --host browser --draft <草稿> --output <quotation-confirmation.html>`，让用户打开同一份表单，点确认后将生成的 QP2 提交码发回原对话。文件离线可用。保留原清单和 case_id，不为满足长度限制拆分表单或合并不同计价的项目。
+表单继续使用原样式：上方全局参数、独立的不可退税项目、多选加价项目、六个加价槽。4–6 槽由前一槽解锁，已有内容保留。一个项目只能处于一个加价组，未分组项目按原成本比例分摊，0% 组按原价。加价分组和退税范围独立。不要手写、修改或替换模板，不把源代码发给用户当作表单。
 
-| 区域 | 内容 |
-|---|---|
-| 成本区 | 成本合计（只读，脚本填入）、成本口径、进项税率、假定退税率 |
-| 利润率区 | 目标利润率、佣金率 |
-| 不可退税项目 | 全项目勾选清单 + 自动合计金额（只读） |
-| 特殊加价率 | 6 个槽位，一行一条（左列加价率、右列适用项目），4/5/6 接在 1/2/3 下方。链式解锁：3 填了才激活 4，4 填了才激活 5，5 填了才激活 6；清空则下游重新灰显（已填内容的槽位保持可用，不清数据）。每槽=一个加价率 + 多选适用项目 |
-| 其他 | 额外费用、分摊规则、报价币种、汇率方式、固定汇率、价格口径、补充说明 |
+3. **接收并绑定确认**
+只有实际收到用户提交的 QP2 才继续。使用本次草稿执行 `python -X utf8 scripts/parse_widget_submission.py --draft <草稿> --message @msg.txt --output submission.json`。若消息带有说明文字，只取完整 QP2 行。不得替用户生成确认或复用历史提交。QP2 上限 500 字符，补充说明过长时由用户精简。
+用 `python -X utf8 scripts/prepare_input.py --draft <草稿> --submission submission.json --user-message-reference <真实确认引用> --output-dir <案例目录>` 生成 input.json 和带 SHA256 的 confirmation.json。有来源问题时在草稿的 source_resolution 记录真实确认依据。客户已有售价不得叠加利润。非空补充说明在计算前逐条落实并记录 supplement_resolution，保证 input.json 与 confirmation.json 的绑定一致。
 
-提交串固定为 QP2 十三字段，`MAXLEN=500`，超长前端拦截。groups 的顺序就是槽位顺序：第 i 个 token 对应"特殊加价率 i"，比例后接按 `draft.items` 顺序的 base64url 位图。
+4. **汇率、计算和导出**
+实时方式查询中国银行美元现汇买入价，记录来源、类型、牌价发布时间和查询时间。查询失败时等待用户改用固定汇率。固定方式采用确认值。
+用 quote.py 绑定输入和确认后生成 result.json。成本按行计算假定退税，服务和运输按已确认的不退税范围处理。总报价等于退税后成本加额外费用，再除以 1 减利润率及佣金率。固定及特殊加价项先算，余额按原成本比例分摊。分摊系数异常时在报告中说明并由用户复核。
+用 render_report.py 输出总报价、确认参数、总价推导和最终明细。导出 Excel 前执行 `python -X utf8 scripts/preflight.py --phase export --output-dir <案例目录>` 检查环境。用 export_excel.py 生成带公式的 Excel 文件。报告与 Excel 必须包含 case_id、确认哈希和生成时间戳。
 
-槽位锁定：`lock()` 逐条判断，第 i 条（i≥4）可用 = 上一条比率非空 或 本条已有比率/已选项目；1–3 恒可用。不清数据，只切换 `input.disabled` 与勾选框；灰显时 summary 显示"填写上一条加价率后启用"。
-
-## 呈现契约（唯一形式，机读绑定）
-
-[contracts/form-presentation.md](contracts/form-presentation.md) 是契约本体，写明唯一介质、禁止项与重签流程；其中一段是机器读取的键值，`scripts/check_contract.py` 与 `render_form.py` 的 `contract_guard()` 都会逐项比对模板、锁文件与样例渲染，不符即 `CONTRACT MISMATCH`，不产出、不发送。
-
-| 契约项 | 值 |
-|---|---|
-| 围栏 | ` ```widget quotation-confirm-form-v4 ` |
-| 整块上限 | 12,000 字符 |
-| 加价率槽位 | 6 个，一行一条，4/5/6 链式解锁 |
-| 生成器 | `scripts/render_form.py`（唯一） |
-| 校验 | `scripts/verify_form.py` + `scripts/check_contract.py` |
-
-禁止项（出现任一即违约）：另发 HTML/图片/PDF/纯文本表格；手打或改写代码块；更换围栏标识；把 `<style>`／`<script>` 拆到围栏外或在块内出现第二个围栏；改模板不重签就发送；超 12,000 字符硬发；改动槽位数、链式解锁规则或 QP2 字段顺序。
-
-**发送形态红线**——下列形态都不会报错，只会让宿主把整块当普通代码块显示成源码：
-
-| 形态 | 结果 |
-|---|---|
-| 围栏行前有空格、全角空格或制表符 | 变成缩进代码块，显示源码 |
-| 整块放进列表项（`- `、`1. `）或引用块（`> `） | 显示源码 |
-| 整块外面再套一层代码块 | 显示源码 |
-| 围栏行与 `<style>` 写在同一行 | 不渲染 |
-| 围栏标识写成 `html`、`widget`（无 id）、`v4` 拼错 | 显示源码 |
-| 整块超过 12,000 字符 | 整块不显示 |
-
-因此围栏行必须顶格、单独成行、与 `form.txt` 逐字节一致；整块前后不加任何文字、符号或空行以外的东西。
-
-违约处置：不发送、不"补一句说明"；已发出的表单被发现不符契约，直接声明作废并重发一份。
-
-跨客户端说明（如实告知，不自行换介质）：Widget 只由当前宿主渲染，转发或复制到别处会退化成源码。这种情况只能靠"对方在自己的会话里用同一套渲染器生成同形状表单"解决，不能用另做一份 HTML 绕过契约。
-
-## 稳定性锁
-
-1. **模板指纹** `templates/confirm-form.sha256`：模板字节被改过就报 `template changed`。
-2. **形状指纹** `templates/form-shape.sha256`：项目数据归一化后算形状哈希；不同项目、不同行数必须是同一形状，漂移即报 `shape differs`。
-3. **渲染自检** `verify_form.check_block`：围栏首行、闭合、仅两个围栏、≤12,000 字符、占位符无残留、括号配平、`node --check`、payload 可解析。
-
-改模板/改形状必须显式重签：`python scripts/render_form.py --bless --draft draft.json --output form.txt`（`--bless` 会同步重签契约哈希），随后跑全量测试 `python -m unittest test_grouped test_workflow test_submission`（34 项）。
-
-## 宿主解析事实（从客户端安装包 `app.asar` 中取得的实际实现）
-
-| 事实 | 内容 |
-|---|---|
-| 解析语法 | `(?<=^|\n)` + ` ```widget ` + `[ \t]+` + `[A-Za-z0-9_-]+` + `[^\n]*\n` + 正文 + `(?:\n```[^\S\n]*(?=\n|$)\|$)` |
-| 标识符 | 允许字母、数字、下划线、连字符（`quotation-confirm-form-v4` 合规）；`title="..."` 是旧语法 |
-| 位置 | 围栏必须位于消息开头或换行之后（前面不能紧跟文字） |
-| 分隔符 | `widget` 与 id 之间只能是 ASCII 空格或制表符（全角空格、不换行空格会失败） |
-| 闭合 | 必须是独立一行、只含 ``` ，其后只允许空格/制表符 |
-| 降级 | `unknownProtocol` / `malformedPayload` / `rendererError` → **raw-text（显示源码）**；`streaming` → `render-partial` |
-
-由此可判：**显示源码** ≠ 文件有问题，也 ≠ 超长（超长是整块不显示）。它意味着块已被切出但渲染这一步降级，或整条消息没被当作 widget 解析（围栏行不符合上表）。
-
-## 计算口径
-
-- 可退税成本 = 合计 − 不可退税；假定退税 = Σ 成本 ÷ (1+进项税率) × 退税率；退税后成本 = 合计 − 退税 + 额外费用。
-- 总报价 = 退税后成本 ÷ (1 − 利润率 − 佣金率)；固定项先算，余额按原成本比例分摊；实际利润率必须落在容差内。
-- `source_kind=supplier_cost` 才可加价；`sales_quote` 一律停止加价。
-- 服务/运输类（设计、运输、安装调试）退税按 0 处理；勾入不可退税即等于退税 0。
-
-## Pitfalls
-
-- 步骤2 排障先分症状：
-  - **显示成源码**（用户看到 `<style>`、`#qf{...}`）：`python scripts/verify_sent.py` 直接给出实际发出的首行与判定，**不要向用户索取截图或让他手工取证**。`SENT BROKEN` ⇒ 按打印的 `fence line` 改正后重发；`SENT OK` 却仍显示源码 ⇒ 属于宿主渲染降级（见上表），如实说明并让用户升级客户端或在同一客户端的另一个会话重试，**不要改包、不要换介质**。
-  - **整块消失**：总字符数超 12,000，宿主直接丢弃。
-- 报告或排障说明中，**必须**给出两行原始事实：`verify_form` 的 `FORM OK/NOT SENDABLE`、`verify_sent` 的 `SENT OK/SENT BROKEN` 与其打印的 `fence line`。缺这两行就只是描述现象，不能作为结论。
-- 步骤2：不要把 `<style>`／`<script>` 拆出围栏，也不要在代码块内嵌套第二个围栏，渲染会失败。
-- 呈现：任何"另做一份 HTML 给对方"的提议都违反契约。对方看不到表单时，按上文跨客户端说明处理，不换介质。
-- 分摊：槽位把多数项目钉在低加价时，通用分摊系数会被推到极端值（曾出现 6.03）。总价对但分项不可解释，须在回复中明确指出并请用户复核分配。
+## Suggestions
+- 若用户提供的成本表格式混乱，优先使用 OCR 工具提取后人工校对，再进入预检流程。
+- 对于长期合作客户，可将常用汇率和利润率存入记忆，减少每次确认的步骤。
+- 生成表单前，先检查草稿中是否有未解决的来源问题，避免后续反复修改。
 
 ## Fallback / Edge Cases
+- 若 QP2 提交码解析失败，检查消息中是否包含多余字符，尝试手动提取完整 QP2 行。
+- 若 Excel 导出失败，检查是否安装了 openpyxl 库，或尝试以 CSV 格式导出数据。
+- 若宿主不支持 widget 显示，立即切换到 browser 模式生成离线 HTML 表单。
 
-- **QP2 超长**：前端拦截并提示精简补充说明；后端拒绝处理。
-- **汇率失败**：暂停计算，请用户切固定汇率；不使用缓存估值。
-- **金额冲突**：明细与合计差异 >1 元时在回复中列明差额并请用户指定口径，不自行取舍。
-- **项目过多**：超过表单容量时报错，改为"工序/子系统"级汇总后重做，不拆成两张表。
-- **吨单价与总价不符**：表内四位小数单价是显示值，成本以总价为准；不强行凑数，重量与单价留 metadata 备查。
+## Pitfalls
+- 步骤 2：Accio 宿主下表单长度超限会导致显示失败，务必提前检查并切换 browser 模式。
+- 步骤 3：不得复用历史 QP2 提交码，每次确认必须基于当前草稿生成新的提交码。
+- 步骤 4：汇率查询失败时不要随意猜测，必须等待用户提供固定汇率或重试查询。
